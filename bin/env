@@ -1,0 +1,52 @@
+#!/bin/sh
+
+DIRNAME=`dirname "$0"`
+
+if [ -z "$KITE_BASE_DIR" ]; then
+	KITE_BASE_DIR=`cd "$DIRNAME/.."; pwd`
+fi
+
+if [ -z "$KITE_CONFIG_DIR" ]; then
+	KITE_CONFIG_DIR="$KITE_BASE_DIR/etc"
+fi
+
+if [ -z "$KITE_LIB_DIR" ]; then
+	KITE_LIB_DIR="$KITE_BASE_DIR/lib"
+fi
+
+if [ -z "$KITE_DATA_DIR" ]; then
+	KITE_DATA_DIR="$KITE_BASE_DIR/var"
+fi
+
+if [ -z "$KITE_LOG_DIR" ]; then
+	KITE_LOG_DIR="$KITE_DATA_DIR/log"
+fi
+
+if [ -z "$KITE_PID_DIR" ]; then
+	KITE_PID_DIR="$KITE_DATA_DIR/pid"
+fi
+
+
+check_or_create() {
+	ARG_DIR=$1
+	ARG_HUMAN_NAME=$2	
+
+	if [ -e "$ARG_DIR" ]; then 
+		if [ ! -d "$ARG_DIR" ]; then
+			echo "$ARG_HUMAN_NAME \"$ARG_DIR\" exists but is not a directory"
+			exit 1
+		fi
+	else 
+		mkdir -p $ARG_DIR
+	fi
+}
+
+check_or_create $KITE_LOG_DIR "Log directory"
+check_or_create $KITE_PID_DIR "PID directory"
+
+# echo `pwd`
+# echo "Kite base: $KITE_BASE_DIR"
+# echo "Kite libs: $KITE_LIB_DIR"
+# echo "Kite data: $KITE_DATA_DIR"
+# echo "Kite log: $KITE_LOG_DIR"
+# echo "Kite pid: $KITE_PID_DIR"

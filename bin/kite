@@ -1,0 +1,164 @@
+#!/bin/sh
+
+DIRNAME=`dirname "$0"`
+. "$DIRNAME/env"
+
+usage="Usage: kite <start|stop|restart> <service name>"
+
+kite_command=$1
+serv_name=$2
+
+if [ -z $kite_command ] || [ -z $serv_name ] ; then 
+	echo "$usage"
+	exit 1
+fi
+
+
+load_service_config() {
+
+	serv_config_path=$1
+
+	if [ ! -d $serv_config_path ] ; then 
+		echo "Missing service configuration directory: $serv_config_path"
+		exit 1
+	fi
+
+	cp_file="$serv_config_path/classpath"
+
+	if [ ! -f $cp_file ] ; then 
+		echo "Missing classpath file for service $serv_name."
+		exit 1
+	fi
+
+	main_file="$serv_config_path/mainclass"
+
+	if [ ! -f $main_file ] ; then 
+		echo "Missing main class file for service $serv_name."
+		exit 1
+	fi
+
+	SERVICE_CP=`cat $cp_file`
+	SERVICE_MAIN_CLASS=`cat $main_file`	
+}
+
+start_service() {
+
+	JAVA_PROPS="-Dlogback.configurationFile=etc/logback.xml -Dproc.log.dir=$KITE_LOG_DIR -Dproc.name=$serv_name"
+
+	SERVICE_CP="$SERVICE_CP:lib/logback-core-1.0.7.jar:lib/logback-classic-1.0.7.jar"
+
+	run_line="java $JAVA_PROPS -cp $SERVICE_CP $SERVICE_MAIN_CLASS"
+	echo $run_line
+
+	$run_line 2> $KITE_LOG_DIR/stderr > $KITE_LOG_DIR/stdout &
+
+	PID=$!
+
+	echo $PID
+	echo $PID > $PID_FILE
+
+}
+
+check_running() {
+	pid_file=$1
+
+	if [ -f "$pid_file" ] ; then 
+		current_pid=`cat $pid_file`
+
+		if [ -z "$current_pid" ] ; then 
+			rm $pid_file
+			echo "Warning: PID file for $serv_name is empty. Removing file."
+			return 0
+		else 
+			current_status=`ps h -p $current_pid`
+
+			if [ -z "$current_status" ] ; then 
+				rm $pid_file
+				echo "Warning: PID file for $serv_name exists but process not running. Removing file."
+				return 0
+			else
+				return 1 
+			fi
+		fi
+	else 
+		return 0
+	fi
+}
+
+kill_pid() {
+	pid=$1
+
+	kill $pid
+
+	current_status=`ps h -p $pid 2>/dev/null` 
+    echo -n "Waiting for $serv_name to stop..."
+
+	while [ -n "$current_status" ]
+	do
+		echo -n "."
+		sleep 1
+		current_status=`ps h -p $pid 2>/dev/null` 
+	done
+
+	echo ""
+}
+
+stop_process() {
+	pid_file=$1
+
+	if [ -f "$pid_file" ] ; then 
+		current_pid=`cat $pid_file`
+
+		if [ -z "$current_pid" ] ; then 
+			rm $pid_file
+			echo "Warning: PID file for $serv_name is empty. Removing file."
+		else 
+			current_status=`ps h -p "$current_pid" 2> /dev/null`
+
+			if [ -z "$current_status" ] ; then 
+				rm $pid_file
+				echo "Warning: PID file for $serv_name exists but process not running. Removing file."
+			else
+				echo "Stopping $serv_name."
+				kill_pid $current_pid
+				rm $pid_file
+			fi
+		fi
+	else 
+		echo "Service $serv_name not running."
+	fi
+}
+
+PID_FILE="$KITE_PID_DIR/$serv_name.pid"
+
+case $kite_command in 
+	start) 
+
+		check_running $PID_FILE
+		result=$?
+
+		if [ $result -ne 0 ] ; then 
+			echo "Service $serv_name currently running."
+		else
+			echo "Starting $serv_name..."
+			load_service_config "$KITE_CONFIG_DIR/service/$serv_name"
+			start_service
+		fi
+
+		;;
+	stop)
+
+		stop_process $PID_FILE
+
+		;;
+	restart)
+		
+		;;
+	*)
+		echo "$usage"
+		exit 1
+		;;
+esac
+
+
+
