@@ -19,7 +19,7 @@ load_service_config() {
 	serv_config_path=$1
 
 	if [ ! -d $serv_config_path ] ; then 
-		echo "Missing service configuration directory: $serv_config_path"
+		echo "No configuration for service: $serv_name"
 		exit 1
 	fi
 
@@ -43,14 +43,17 @@ load_service_config() {
 
 start_service() {
 
-	JAVA_PROPS="-Dlogback.configurationFile=etc/logback.xml -Dproc.log.dir=$KITE_LOG_DIR -Dproc.name=$serv_name"
+	serv_log_dir="$KITE_LOG_DIR/$serv_name"
+	check_or_create "$serv_log_dir"
+
+	JAVA_PROPS="-Dlogback.configurationFile=etc/logback.xml -Dproc.log.dir=$serv_log_dir -Dproc.name=$serv_name"
 
 	SERVICE_CP="$SERVICE_CP:lib/logback-core-1.0.7.jar:lib/logback-classic-1.0.7.jar"
 
 	run_line="java $JAVA_PROPS -cp $SERVICE_CP $SERVICE_MAIN_CLASS"
 	echo $run_line
 
-	$run_line 2> $KITE_LOG_DIR/stderr > $KITE_LOG_DIR/stdout &
+	$run_line 2> "$serv_log_dir/stderr" > "$serv_log_dir/stdout" &
 
 	PID=$!
 
@@ -140,8 +143,8 @@ case $kite_command in
 		if [ $result -ne 0 ] ; then 
 			echo "Service $serv_name currently running."
 		else
-			echo "Starting $serv_name..."
 			load_service_config "$KITE_CONFIG_DIR/service/$serv_name"
+			echo "Starting $serv_name..."
 			start_service
 		fi
 
