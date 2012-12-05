@@ -44,9 +44,10 @@ check_or_create() {
 check_or_create $KITE_LOG_DIR "Log directory"
 check_or_create $KITE_PID_DIR "PID directory"
 
-# echo `pwd`
-# echo "Kite base: $KITE_BASE_DIR"
-# echo "Kite libs: $KITE_LIB_DIR"
-# echo "Kite data: $KITE_DATA_DIR"
-# echo "Kite log: $KITE_LOG_DIR"
-# echo "Kite pid: $KITE_PID_DIR"
+echo `pwd`
+echo "Kite base: $KITE_BASE_DIR"
+echo "Kite libs: $KITE_CONFIG_DIR"
+echo "Kite libs: $KITE_LIB_DIR"
+echo "Kite data: $KITE_DATA_DIR"
+echo "Kite log: $KITE_LOG_DIR"
+echo "Kite pid: $KITE_PID_DIR"

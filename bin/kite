@@ -18,23 +18,31 @@ load_service_config() {
 
 	serv_config_path=$1
 
-	if [ ! -d $serv_config_path ] ; then 
+	if [ ! -d "$serv_config_path" ] ; then 
 		echo "No configuration for service: $serv_name"
 		exit 1
 	fi
 
 	cp_file="$serv_config_path/classpath"
 
-	if [ ! -f $cp_file ] ; then 
+	if [ ! -f "$cp_file" ] ; then 
 		echo "Missing classpath file for service $serv_name."
 		exit 1
 	fi
 
 	main_file="$serv_config_path/mainclass"
 
-	if [ ! -f $main_file ] ; then 
+	if [ ! -f "$main_file" ] ; then 
 		echo "Missing main class file for service $serv_name."
 		exit 1
+	fi
+
+	SERVICE_LOGBACK_CONFIG="$KITE_CONFIG_DIR/logback.xml"
+
+	specific_logback_config="$serv_config_path/logback.xml"
+	
+	if [ -f "$specific_logback_config" ] ; then
+		SERVICE_LOGBACK_CONFIG=$specific_logback_config	
 	fi
 
 	SERVICE_CP=`cat $cp_file`
@@ -46,7 +54,7 @@ start_service() {
 	serv_log_dir="$KITE_LOG_DIR/$serv_name"
 	check_or_create "$serv_log_dir"
 
-	JAVA_PROPS="-Dlogback.configurationFile=etc/logback.xml -Dproc.log.dir=$serv_log_dir -Dproc.name=$serv_name"
+	JAVA_PROPS="-Dlogback.configurationFile=$SERVICE_LOGBACK_CONFIG -Dproc.log.dir=$serv_log_dir -Dproc.name=$serv_name"
 
 	SERVICE_CP="$SERVICE_CP:lib/logback-core-1.0.7.jar:lib/logback-classic-1.0.7.jar"
 
