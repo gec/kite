@@ -37,16 +37,22 @@ load_service_config() {
 		exit 1
 	fi
 
+	SERVICE_CP=`cat $cp_file`
+	SERVICE_MAIN_CLASS=`cat $main_file`	
+
+
 	SERVICE_LOGBACK_CONFIG="$KITE_CONFIG_DIR/logback.xml"
 
 	specific_logback_config="$serv_config_path/logback.xml"
-	
+
 	if [ -f "$specific_logback_config" ] ; then
 		SERVICE_LOGBACK_CONFIG=$specific_logback_config	
 	fi
 
-	SERVICE_CP=`cat $cp_file`
-	SERVICE_MAIN_CLASS=`cat $main_file`	
+	props_file="$serv_config_path/javaprops"
+	if [ -f "$props_file" ] ; then
+		SERVICE_JAVA_PROPS=`cat $props_file`
+	fi
 }
 
 start_service() {
@@ -55,6 +61,9 @@ start_service() {
 	check_or_create "$serv_log_dir"
 
 	JAVA_PROPS="-Dlogback.configurationFile=$SERVICE_LOGBACK_CONFIG -Dproc.log.dir=$serv_log_dir -Dproc.name=$serv_name"
+	if [ ! -z "$SERVICE_JAVA_PROPS" ] ; then
+		JAVA_PROPS="$JAVA_PROPS $SERVICE_JAVA_PROPS"
+	fi
 
 	SERVICE_CP="$SERVICE_CP:lib/logback-core-1.0.7.jar:lib/logback-classic-1.0.7.jar"
 
@@ -114,6 +123,13 @@ kill_pid() {
 	echo ""
 }
 
+load_and_run() {
+
+	load_service_config "$KITE_CONFIG_DIR/service/$serv_name"
+	echo "Starting $serv_name..."
+	start_service
+}
+
 stop_process() {
 	pid_file=$1
 
@@ -151,9 +167,7 @@ case $kite_command in
 		if [ $result -ne 0 ] ; then 
 			echo "Service $serv_name currently running."
 		else
-			load_service_config "$KITE_CONFIG_DIR/service/$serv_name"
-			echo "Starting $serv_name..."
-			start_service
+			load_and_run
 		fi
 
 		;;
@@ -165,9 +179,7 @@ case $kite_command in
 	restart)
 		stop_process $PID_FILE
 
-		load_service_config "$KITE_CONFIG_DIR/service/$serv_name"
-		echo "Starting $serv_name..."
-		start_service
+		load_and_run
 
 		;;
 	*)
