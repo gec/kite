@@ -155,7 +155,12 @@ case $kite_command in
 
 		;;
 	restart)
-		
+		stop_process $PID_FILE
+
+		load_service_config "$KITE_CONFIG_DIR/service/$serv_name"
+		echo "Starting $serv_name..."
+		start_service
+
 		;;
 	*)
 		echo "$usage"
