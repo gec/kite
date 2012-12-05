@@ -13,29 +13,37 @@ if [ -z $kite_command ] || [ -z $serv_name ] ; then
 	exit 1
 fi
 
+fail_if_file_missing() {
+	file_to_check=$1
+	message=$2
+
+	if [ ! -f "$file_to_check" ] ; then 
+		echo "$message"
+		exit 1
+	fi
+}
+
+fail_if_dir_missing() {
+	dir_to_check=$1
+	message=$2
+
+	if [ ! -d "$dir_to_check" ] ; then 
+		echo "$message"
+		exit 1
+	fi
+}
 
 load_service_config() {
 
 	serv_config_path=$1
-
-	if [ ! -d "$serv_config_path" ] ; then 
-		echo "No configuration for service: $serv_name"
-		exit 1
-	fi
+	fail_if_dir_missing $serv_config_path "No configuration for service: $serv_name"
 
 	cp_file="$serv_config_path/classpath"
-
-	if [ ! -f "$cp_file" ] ; then 
-		echo "Missing classpath file for service $serv_name."
-		exit 1
-	fi
+	fail_if_file_missing $cp_file "Missing classpath file for service $serv_name."
 
 	main_file="$serv_config_path/mainclass"
+	fail_if_file_missing $main_file "Missing main class file for service $serv_name."
 
-	if [ ! -f "$main_file" ] ; then 
-		echo "Missing main class file for service $serv_name."
-		exit 1
-	fi
 
 	SERVICE_CP=`cat $cp_file`
 	SERVICE_MAIN_CLASS=`cat $main_file`	
@@ -177,6 +185,7 @@ case $kite_command in
 
 		;;
 	restart)
+
 		stop_process $PID_FILE
 
 		load_and_run
