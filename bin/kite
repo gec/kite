@@ -33,21 +33,36 @@ fail_if_dir_missing() {
 	fi
 }
 
+build_classpath() {
+	list_file=$1
+
+	SERVICE_CP=
+	for part in `cat $list_file`
+	do
+		abs_file_path="$KITE_LIB_DIR/$part"
+		if [ ! -f "$abs_file_path" ] ; then
+			echo "Could not find jar: $abs_file_path"
+			exit 1
+		fi
+		SERVICE_CP="$SERVICE_CP:$abs_file_path"
+	done
+}
+
+
 load_service_config() {
 
 	serv_config_path=$1
 	fail_if_dir_missing $serv_config_path "No configuration for service: $serv_name"
 
-	cp_file="$serv_config_path/classpath"
-	fail_if_file_missing $cp_file "Missing classpath file for service $serv_name."
-
 	main_file="$serv_config_path/mainclass"
 	fail_if_file_missing $main_file "Missing main class file for service $serv_name."
 
+	jarlist_file="$serv_config_path/jarlist"
+	fail_if_file_missing $jarlist_file "Missing list of jars to load for service $serv_name"
 
-	SERVICE_CP=`cat $cp_file`
+	build_classpath $jarlist_file
+
 	SERVICE_MAIN_CLASS=`cat $main_file`	
-
 
 	SERVICE_LOGBACK_CONFIG="$KITE_CONFIG_DIR/logback.xml"
 
@@ -73,14 +88,16 @@ start_service() {
 		JAVA_PROPS="$JAVA_PROPS $SERVICE_JAVA_PROPS"
 	fi
 
-	SERVICE_CP="$SERVICE_CP:lib/logback-core-1.0.7.jar:lib/logback-classic-1.0.7.jar"
+	SERVICE_CP="$SERVICE_CP:$KITE_LIB_DIR/logback-core-1.0.7.jar:$KITE_LIB_DIR/logback-classic-1.0.7.jar"
 
 	run_line="java $JAVA_PROPS -cp $SERVICE_CP $SERVICE_MAIN_CLASS"
 	echo $run_line
 
-	$run_line 2> "$serv_log_dir/stderr" > "$serv_log_dir/stdout" &
-
+	old_pwd=`pwd`
+	cd $KITE_CONFIG_DIR
+	$run_line 2> "$serv_log_dir/stderr" > "$serv_log_dir/stdout" & 
 	PID=$!
+	cd $old_pwd
 
 	echo $PID
 	echo $PID > $PID_FILE
