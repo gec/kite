@@ -1,17 +1,59 @@
 #!/bin/sh
 
 DIRNAME=`dirname "$0"`
-. "$DIRNAME/env"
 
-usage="Usage: kite <start|stop|restart> <service name>"
+USAGE="Usage: \n\tkite <start|stop|restart> <service name>\n\tkite <run> <utility name>"
 
-kite_command=$1
-serv_name=$2
+KITE_COMMAND=$1
+PROC_NAME=$2
 
-if [ -z $kite_command ] || [ -z $serv_name ] ; then 
-	echo "$usage"
+if [ -z $KITE_COMMAND ] || [ -z $PROC_NAME ] ; then 
+	echo "$USAGE"
 	exit 1
 fi
+
+if [ -z "$KITE_BASE_DIR" ]; then
+	KITE_BASE_DIR=`cd "$DIRNAME/.."; pwd`
+fi
+
+if [ -z "$KITE_CONFIG_DIR" ]; then
+	KITE_CONFIG_DIR="$KITE_BASE_DIR/etc"
+fi
+
+if [ -z "$KITE_LIB_DIR" ]; then
+	KITE_LIB_DIR="$KITE_BASE_DIR/lib"
+fi
+
+if [ -z "$KITE_DATA_DIR" ]; then
+	KITE_DATA_DIR="$KITE_BASE_DIR/var"
+fi
+
+if [ -z "$KITE_LOG_DIR" ]; then
+	KITE_LOG_DIR="$KITE_DATA_DIR/log"
+fi
+
+if [ -z "$KITE_PID_DIR" ]; then
+	KITE_PID_DIR="$KITE_DATA_DIR/pid"
+fi
+
+check_or_create() {
+	ARG_DIR=$1
+	ARG_HUMAN_NAME=$2	
+
+	if [ -e "$ARG_DIR" ]; then 
+		if [ ! -d "$ARG_DIR" ]; then
+			echo "$ARG_HUMAN_NAME \"$ARG_DIR\" exists but is not a directory"
+			exit 1
+		fi
+	else 
+		mkdir -p $ARG_DIR
+	fi
+}
+
+check_or_create $KITE_LOG_DIR "Log directory"
+check_or_create $KITE_PID_DIR "PID directory"
+
+
 
 fail_if_file_missing() {
 	file_to_check=$1
@@ -36,7 +78,7 @@ fail_if_dir_missing() {
 build_classpath() {
 	list_file=$1
 
-	SERVICE_CP=
+	PROC_CP=
 	for part in `cat $list_file`
 	do
 		abs_file_path="$KITE_LIB_DIR/$part"
@@ -44,54 +86,64 @@ build_classpath() {
 			echo "Could not find jar: $abs_file_path"
 			exit 1
 		fi
-		SERVICE_CP="$SERVICE_CP:$abs_file_path"
+		if [ -z "$PROC_CP" ] ; then 
+			PROC_CP=$abs_file_path
+		else
+			PROC_CP="$PROC_CP:$abs_file_path"
+		fi
 	done
 }
 
+load_proc_java_config() {
+	proc_config_path=$1
+	fail_if_dir_missing $proc_config_path "No configuration for service: $PROC_NAME"
 
-load_service_config() {
+	main_file="$proc_config_path/mainclass"
+	fail_if_file_missing $main_file "Missing main class file for service $PROC_NAME."
 
-	serv_config_path=$1
-	fail_if_dir_missing $serv_config_path "No configuration for service: $serv_name"
-
-	main_file="$serv_config_path/mainclass"
-	fail_if_file_missing $main_file "Missing main class file for service $serv_name."
-
-	jarlist_file="$serv_config_path/jarlist"
-	fail_if_file_missing $jarlist_file "Missing list of jars to load for service $serv_name"
+	jarlist_file="$proc_config_path/jarlist"
+	fail_if_file_missing $jarlist_file "Missing list of jars to load for service $PROC_NAME"
 
 	build_classpath $jarlist_file
 
-	SERVICE_MAIN_CLASS=`cat $main_file`	
+	PROC_MAIN_CLASS=`cat $main_file`	
+}
+
+load_logback_config() {
+	proc_config_path=$1
 
 	SERVICE_LOGBACK_CONFIG="$KITE_CONFIG_DIR/logback.xml"
 
-	specific_logback_config="$serv_config_path/logback.xml"
+	specific_logback_config="$proc_config_path/logback.xml"
 
 	if [ -f "$specific_logback_config" ] ; then
 		SERVICE_LOGBACK_CONFIG=$specific_logback_config	
 	fi
+}
 
-	props_file="$serv_config_path/javaprops"
+load_java_properties() {
+	proc_config_path=$1
+
+	props_file="$proc_config_path/javaprops"
 	if [ -f "$props_file" ] ; then
-		SERVICE_JAVA_PROPS=`cat $props_file`
-	fi
+		PROC_JAVA_PROPS=`cat $props_file`
+	fi	
 }
 
 start_service() {
 
-	serv_log_dir="$KITE_LOG_DIR/$serv_name"
+	serv_log_dir="$KITE_LOG_DIR/$PROC_NAME"
 	check_or_create "$serv_log_dir"
 
-	JAVA_PROPS="-Dlogback.configurationFile=$SERVICE_LOGBACK_CONFIG -Dproc.log.dir=$serv_log_dir -Dproc.name=$serv_name"
-	if [ ! -z "$SERVICE_JAVA_PROPS" ] ; then
-		JAVA_PROPS="$JAVA_PROPS $SERVICE_JAVA_PROPS"
+	JAVA_PROPS="-Dlogback.configurationFile=$SERVICE_LOGBACK_CONFIG -Dproc.log.dir=$serv_log_dir -Dproc.name=$PROC_NAME"
+	if [ ! -z "$PROC_JAVA_PROPS" ] ; then
+		JAVA_PROPS="$JAVA_PROPS $PROC_JAVA_PROPS"
 	fi
 
-	SERVICE_CP="$SERVICE_CP:$KITE_LIB_DIR/logback-core-1.0.7.jar:$KITE_LIB_DIR/logback-classic-1.0.7.jar"
+	PROC_CP="$PROC_CP:$KITE_LIB_DIR/logback-core-1.0.7.jar:$KITE_LIB_DIR/logback-classic-1.0.7.jar"
 
-	run_line="java $JAVA_PROPS -cp $SERVICE_CP $SERVICE_MAIN_CLASS"
-	echo $run_line
+	run_line="java $JAVA_PROPS -cp $PROC_CP $PROC_MAIN_CLASS"
+	#echo $run_line
 
 	old_pwd=`pwd`
 	cd $KITE_CONFIG_DIR
@@ -104,6 +156,20 @@ start_service() {
 
 }
 
+load_and_run_service() {
+
+	serv_config_path="$KITE_CONFIG_DIR/service/$PROC_NAME"
+	fail_if_dir_missing $serv_config_path "No configuration for service: $PROC_NAME"
+
+	load_proc_java_config "$serv_config_path"
+	load_logback_config "$serv_config_path"
+	load_java_properties "$serv_config_path"
+
+	echo "Starting $PROC_NAME..."
+
+	start_service
+}
+
 check_running() {
 	pid_file=$1
 
@@ -112,14 +178,14 @@ check_running() {
 
 		if [ -z "$current_pid" ] ; then 
 			rm $pid_file
-			echo "Warning: PID file for $serv_name is empty. Removing file."
+			echo "Warning: PID file for $PROC_NAME is empty. Removing file."
 			return 0
 		else 
 			current_status=`ps h -p $current_pid`
 
 			if [ -z "$current_status" ] ; then 
 				rm $pid_file
-				echo "Warning: PID file for $serv_name exists but process not running. Removing file."
+				echo "Warning: PID file for $PROC_NAME exists but process not running. Removing file."
 				return 0
 			else
 				return 1 
@@ -136,7 +202,7 @@ kill_pid() {
 	kill $pid
 
 	current_status=`ps h -p $pid 2>/dev/null` 
-    echo -n "Waiting for $serv_name to stop..."
+    echo -n "Waiting for $PROC_NAME to stop..."
 
 	while [ -n "$current_status" ]
 	do
@@ -148,13 +214,6 @@ kill_pid() {
 	echo ""
 }
 
-load_and_run() {
-
-	load_service_config "$KITE_CONFIG_DIR/service/$serv_name"
-	echo "Starting $serv_name..."
-	start_service
-}
-
 stop_process() {
 	pid_file=$1
 
@@ -163,36 +222,60 @@ stop_process() {
 
 		if [ -z "$current_pid" ] ; then 
 			rm $pid_file
-			echo "Warning: PID file for $serv_name is empty. Removing file."
+			echo "Warning: PID file for $PROC_NAME is empty. Removing file."
 		else 
 			current_status=`ps h -p "$current_pid" 2> /dev/null`
 
 			if [ -z "$current_status" ] ; then 
 				rm $pid_file
-				echo "Warning: PID file for $serv_name exists but process not running. Removing file."
+				echo "Warning: PID file for $PROC_NAME exists but process not running. Removing file."
 			else
-				echo "Stopping $serv_name."
+				echo "Stopping $PROC_NAME."
 				kill_pid $current_pid
 				rm $pid_file
 			fi
 		fi
 	else 
-		echo "Service $serv_name not running."
+		echo "Service $PROC_NAME not running."
 	fi
 }
 
-PID_FILE="$KITE_PID_DIR/$serv_name.pid"
+run_util() {
 
-case $kite_command in 
+	PROC_CP="$PROC_CP:$KITE_LIB_DIR/logback-core-1.0.7.jar:$KITE_LIB_DIR/logback-classic-1.0.7.jar"
+
+	run_line="java $JAVA_PROPS -cp $PROC_CP $PROC_MAIN_CLASS"
+	#echo $run_line
+
+	old_pwd=`pwd`
+	cd $KITE_CONFIG_DIR
+	$run_line 
+}
+
+load_and_run_util() {
+
+	util_config_path="$KITE_CONFIG_DIR/utility/$PROC_NAME"
+	fail_if_dir_missing $util_config_path "No configuration for utility: $PROC_NAME"
+
+	load_proc_java_config "$util_config_path"
+	load_java_properties "$util_config_path"
+
+	run_util
+}
+
+
+PID_FILE="$KITE_PID_DIR/$PROC_NAME.pid"
+
+case $KITE_COMMAND in 
 	start) 
 
 		check_running $PID_FILE
 		result=$?
 
 		if [ $result -ne 0 ] ; then 
-			echo "Service $serv_name currently running."
+			echo "Service $PROC_NAME currently running."
 		else
-			load_and_run
+			load_and_run_service
 		fi
 
 		;;
@@ -205,11 +288,16 @@ case $kite_command in
 
 		stop_process $PID_FILE
 
-		load_and_run
+		load_and_run_service
+
+		;;
+	run)
+	
+		load_and_run_util 
 
 		;;
 	*)
-		echo "$usage"
+		echo "$USAGE"
 		exit 1
 		;;
 esac
